@@ -13,6 +13,7 @@ main = do
         display gameState
         listenTo connectionSocket gameState player
 
+
 listenTo socket gameState player = do
     msg <- recv socket 256
     maybe nothingReceived dataReceived msg
@@ -28,13 +29,14 @@ listenTo socket gameState player = do
             send socket $ pack "ack"
             listenTo socket gameState player
 
+
 display gameState = do
-    state <- takeMVar gameState
-    putMVar gameState state
+    state <- readMVar gameState
     putStrLn $ "Clients: "  ++ show (playerNrOf state)
     putStrLn $ "Id: " ++ (show . idNrOf) state
     mapM_ (putStrLn . show) $ playersOf state
     putStrLn ""
+
 
 playerConnect gameState = do
     state <- takeMVar gameState
@@ -47,9 +49,11 @@ playerConnect gameState = do
                               , playersOf = newPlayers}
     return player
 
+
 playerDisconnect gameState player = do
     state <- takeMVar gameState
     let newPlayerNr = playerNrOf state - 1
     let newPlayers = filter (/= player) $ playersOf state
     putMVar gameState $ state { playerNrOf = newPlayerNr 
                               , playersOf = newPlayers }
+
