@@ -2,6 +2,8 @@
 
 module Utils where
 
+import Text.Read (readMaybe)
+
 data Role = Unassigned
           | Civilian
           | Maffia
@@ -10,20 +12,22 @@ data Role = Unassigned
 data Player = Player { idOf :: Int
                      , nameOf :: String
                      , roleOf :: Role
+                     , readyOf :: Bool
                      } deriving (Show, Eq)
 
 data State = State { playersOf :: [Player]
-                   , playerNrOf :: Int
+                   , lobbyChatOf :: [String]
                    , idNrOf :: Int
                    } deriving (Show)
 
 initialState = State { playersOf = [] 
-                     , playerNrOf = 0
+                     , lobbyChatOf = []
                      , idNrOf = 0 }
                      
 newPlayer id name = Player { idOf = id
                            , nameOf = name
-                           , roleOf = Unassigned }
+                           , roleOf = Unassigned 
+                           , readyOf = False }
 
 maffiaFromPlayerNr :: Int -> Int
 maffiaFromPlayerNr pn = ceiling (fromIntegral pn / 3)
@@ -35,3 +39,14 @@ genList playerNumber = maffias ++ civils
         civilNumber  = playerNumber - maffiaNumber
         maffias = replicate maffiaNumber Maffia
         civils  = replicate civilNumber Civilian
+
+
+data Message = Say String
+             | GetMessages Int
+             | Rename String
+             | Unvote String
+             | Vote String
+             | Unready
+             | Ready
+             deriving (Show, Read, Eq)
+                    

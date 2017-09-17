@@ -19,10 +19,10 @@ loop socket = do
         then putStrLn "Exited"
         else do
             send socket $ pack message
-            ack <- recv socket 256
-            maybe noAck acked ack
+            response <- recv socket 2048
+            maybe noAck acked response
             where 
                 noAck = putStrLn "No Message."
-                acked _ = do
-                    putStrLn "Sent"
+                acked r = do
+                    putStrLn $ unpack r
                     loop socket
