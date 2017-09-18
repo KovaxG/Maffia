@@ -16,6 +16,7 @@ main = do
         listenTo connectionSocket gameState pId
 
 
+
 listenTo socket gameState pId = do
     msg <- recv socket 256
     maybe nothingReceived dataReceived msg
@@ -25,7 +26,7 @@ listenTo socket gameState pId = do
             putStrLn $ show pId ++ " Disconnected."
             display gameState
             return ()
-
+        
         dataReceived byteString = do
             let received = readMaybe $ unpack byteString :: Maybe Message
             response <- maybe (return "Not a command") (handle gameState pId) received
@@ -33,30 +34,39 @@ listenTo socket gameState pId = do
             listenTo socket gameState pId
 
 
+
 display gameState = do
     state <- readMVar gameState
+    putStrLn hbar
     putStrLn $ "Clients: "  ++ (show . length . playersOf) state
     putStrLn $ "Id: " ++ (show . idNrOf) state
     putStrLn "Lobby Messages: "
-    mapM_ putStrLn $ lobbyChatOf state
-    mapM_ (putStrLn . show) $ playersOf state
-    putStrLn ""
+    mapM putStrLn $ lobbyChatOf state
+    mapM print $ playersOf state
+    putStrLn hbar
+    where 
+        hbar = replicate 90 '-'
+
 
 
 playerConnect gameState = do
     state <- takeMVar gameState
-    let newIdNr = idNrOf state + 1
-    let player = newPlayer (idNrOf state) ("Duke" ++ show (idNrOf state) ++ " ")
+    let idNr = idNrOf state
+    let player = newPlayer idNr $ "Duke" ++ show idNr
     let newPlayers = player : playersOf state 
     putMVar gameState $ state { playersOf = newPlayers
-                              , idNrOf = newIdNr }
-    return $ idNrOf state
+                              , idNrOf = idNr + 1 }
+    return idNr
+
 
 
 playerDisconnect gameState pId = do
     state <- takeMVar gameState
-    let newPlayers = filter (\p -> idOf p /= pId) $ playersOf state
+    let newPlayers = removeThisPlayerFrom $ playersOf state
     putMVar gameState $ state { playersOf = newPlayers }
+    where 
+        removeThisPlayerFrom = filter $ \p -> idOf p /= pId
+
 
 
 handle gameState pId Ready = do
@@ -68,6 +78,7 @@ handle gameState pId Ready = do
     putMVar gameState $ state {playersOf = newPlayers}
     display gameState
     return "Ack"
+
 handle gameState pId Unready = do
     -- TODO might want to check first if player is already unready
     putStrLn $ show pId ++ " Unready"
@@ -77,15 +88,18 @@ handle gameState pId Unready = do
     putMVar gameState $ state {playersOf = newPlayers}
     display gameState
     return "Ack"
+
 handle gameState pId (Say msg) = do
     state <- takeMVar gameState
     let newMessages = (show pId ++ ": " ++ msg) : lobbyChatOf state
     putMVar gameState $ state {lobbyChatOf = newMessages}
     display gameState
     return "Ack"
+
 handle gameState _ (GetMessages _) = do
     chat <- lobbyChatOf <$> readMVar gameState
     return $ unlines chat
+
 handle gameState pId (Rename newName) = do
     --TODO check so that there are no duplicate names
     state <- takeMVar gameState
@@ -102,6 +116,7 @@ handle gameState pId (Rename newName) = do
             putMVar gameState $ state {playersOf = newPlayers}
             display gameState
             return "Ack"
+
 handle _ _ _ = do
     putStrLn "I forgott to pattern match!"
     return "I forgott to pattern match!"
