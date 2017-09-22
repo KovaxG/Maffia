@@ -68,26 +68,46 @@ playerDisconnect gameState pId = do
         removeThisPlayerFrom = filter $ \p -> idOf p /= pId
 
 
-
+-- TODO might want to merge the logic from Ready and Unready
 handle gameState pId Ready = do
-    -- TODO might want to check first if player is already ready
     putStrLn $ show pId ++ " Ready"
-    state <- takeMVar gameState
-    let players = playersOf state
-    let newPlayers = map (\p -> if idOf p == pId then p {readyOf = True} else p) players
-    putMVar gameState $ state {playersOf = newPlayers}
-    display gameState
-    return "Ack"
+    state <- readMVar gameState
+    let maybePlayer = find playerWithThisId (playersOf state)
+    let ready = maybe False readinessOf maybePlayer
+    if ready 
+    then do
+         display gameState
+         return "Already Ready"
+    else do
+         state <- takeMVar gameState
+         let players = playersOf state
+         let newPlayers = mapIf playerWithThisId setReady players
+         putMVar gameState $ state {playersOf = newPlayers}
+         display gameState
+         return "Ready"
+    where 
+        playerWithThisId p = idOf p == pId
+        setReady p = p {readinessOf = True}
 
 handle gameState pId Unready = do
-    -- TODO might want to check first if player is already unready
     putStrLn $ show pId ++ " Unready"
-    state <- takeMVar gameState
-    let players = playersOf state
-    let newPlayers = map (\p -> if idOf p == pId then p {readyOf = False} else p) players
-    putMVar gameState $ state {playersOf = newPlayers}
-    display gameState
-    return "Ack"
+    state <- readMVar gameState
+    let maybePlayer = find playerWithThisId (playersOf state)
+    let ready = maybe True readinessOf maybePlayer
+    if not ready 
+    then do
+         display gameState
+         return "Already Unready"
+    else do
+         state <- takeMVar gameState
+         let players = playersOf state
+         let newPlayers = mapIf playerWithThisId setUnready players
+         putMVar gameState $ state {playersOf = newPlayers}
+         display gameState
+         return "Unready"
+    where 
+        playerWithThisId p = idOf p == pId
+        setUnready p = p {readinessOf = False}
 
 handle gameState pId (Say msg) = do
     state <- takeMVar gameState

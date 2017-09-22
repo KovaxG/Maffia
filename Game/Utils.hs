@@ -12,7 +12,7 @@ data Role = Unassigned
 data Player = Player { idOf :: Int
                      , nameOf :: String
                      , roleOf :: Role
-                     , readyOf :: Bool
+                     , readinessOf :: Bool
                      } deriving (Show, Eq)
 
 data State = State { playersOf :: [Player]
@@ -27,7 +27,7 @@ initialState = State { playersOf = []
 newPlayer id name = Player { idOf = id
                            , nameOf = name
                            , roleOf = Unassigned 
-                           , readyOf = False }
+                           , readinessOf = False }
 
 maffiaFromPlayerNr :: Int -> Int
 maffiaFromPlayerNr pn = ceiling (fromIntegral pn / 3)
@@ -50,3 +50,6 @@ data Message = Say String
              | Ready
              deriving (Show, Read, Eq)
                     
+                    
+mapIf :: (a -> Bool) -> (a -> a) -> [a] -> [a]
+mapIf p f = map $ \a -> if p(a) == True then f(a) else a
