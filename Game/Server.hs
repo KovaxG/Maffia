@@ -38,6 +38,7 @@ listenTo socket gameState pId = do
 display gameState = do
     state <- readMVar gameState
     putStrLn hbar
+    putStrLn $ "Gamemode is: " ++ (show . modeOf) state
     putStrLn $ "Clients: "  ++ (show . length . playersOf) state
     putStrLn $ "Id: " ++ (show . idNrOf) state
     putStrLn "Lobby Messages: "
@@ -69,6 +70,7 @@ playerDisconnect gameState pId = do
 
 
 -- TODO might want to merge the logic from Ready and Unready
+-- TODO Also don't look at the readyness if the game has already started
 handle gameState pId Ready = do
     putStrLn $ show pId ++ " Ready"
     state <- readMVar gameState
@@ -77,14 +79,19 @@ handle gameState pId Ready = do
     if ready 
     then do
          display gameState
-         return "Already Ready"
+         return "You are already marked as ready."
     else do
          state <- takeMVar gameState
          let players = playersOf state
          let newPlayers = mapIf playerWithThisId setReady players
-         putMVar gameState $ state {playersOf = newPlayers}
+         let readyNr = length $ filter (\p -> readinessOf p == True) newPlayers
+         let mode = if readyNr == length players
+                    then Day
+                    else Lobby
+         putMVar gameState $ state { playersOf = newPlayers,
+                                     modeOf = mode }
          display gameState
-         return "Ready"
+         return "You are marked as ready."
     where 
         playerWithThisId p = idOf p == pId
         setReady p = p {readinessOf = True}
@@ -97,45 +104,56 @@ handle gameState pId Unready = do
     if not ready 
     then do
          display gameState
-         return "Already Unready"
+         return "You are already marked as unready."
     else do
          state <- takeMVar gameState
          let players = playersOf state
          let newPlayers = mapIf playerWithThisId setUnready players
          putMVar gameState $ state {playersOf = newPlayers}
          display gameState
-         return "Unready"
+         return "You are marked as unready."
     where 
         playerWithThisId p = idOf p == pId
         setUnready p = p {readinessOf = False}
 
 handle gameState pId (Say msg) = do
     state <- takeMVar gameState
-    let newMessages = (show pId ++ ": " ++ msg) : lobbyChatOf state
+    let newMessages = (msg ++ ": " ++ show pId) : lobbyChatOf state
     putMVar gameState $ state {lobbyChatOf = newMessages}
     display gameState
-    return "Ack"
+    return "Message Sent."
 
-handle gameState _ (GetMessages _) = do
+handle gameState _ GetMessages = do
     chat <- lobbyChatOf <$> readMVar gameState
     return $ unlines chat
 
 handle gameState pId (Rename newName) = do
-    --TODO check so that there are no duplicate names
     state <- takeMVar gameState
-    let maybePlayer = find (\p -> idOf p == pId) $ playersOf state
-    maybe (failure state) (rename state) maybePlayer
+    let maybePlayerWithName = find playerWithThisName $ playersOf state
+    maybe (changePlayerName state) (playerExists state) maybePlayerWithName
     where 
+        playerExists state _ = do
+            putMVar gameState state
+            return "That name is already taken."
+    
+        changePlayerName state = do
+            let maybePlayer = find playerWithThisId $ playersOf state
+            maybe (failure state) (rename state) maybePlayer
+        
         failure state = do
             putMVar gameState state
-            return "Failure"
+            return "You do not exist."
+            
         rename state player = do
             let players = filter (\p -> idOf p /= pId) $ playersOf state
-            let newplayer = player { nameOf = newName }
+            let newplayer = player {nameOf = newName}
             let newPlayers = newplayer : players
             putMVar gameState $ state {playersOf = newPlayers}
             display gameState
-            return "Ack"
+            return $ "Your name is now " ++ newName
+            
+        playerWithThisId p = idOf p == pId
+        playerWithThisName p = nameOf p == newName
 
 handle _ _ _ = do
     putStrLn "I forgott to pattern match!"

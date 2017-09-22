@@ -14,15 +14,26 @@ data Player = Player { idOf :: Int
                      , roleOf :: Role
                      , readinessOf :: Bool
                      } deriving (Show, Eq)
-
+                     
+                     
+data GameMode = Lobby
+              | Day
+              | Night
+              | End
+              deriving (Show, Eq)
+                     
+                     
 data State = State { playersOf :: [Player]
                    , lobbyChatOf :: [String]
                    , idNrOf :: Int
+                   , modeOf :: GameMode
                    } deriving (Show)
 
 initialState = State { playersOf = [] 
                      , lobbyChatOf = []
-                     , idNrOf = 0 }
+                     , idNrOf = 0 
+                     , modeOf = Lobby
+                     }
                      
 newPlayer id name = Player { idOf = id
                            , nameOf = name
@@ -42,7 +53,7 @@ genList playerNumber = maffias ++ civils
 
 
 data Message = Say String
-             | GetMessages Int
+             | GetMessages
              | Rename String
              | Unvote String
              | Vote String
