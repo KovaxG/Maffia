@@ -7,17 +7,62 @@ import Utils
 import Text.Read (readMaybe)
 import Data.List (find)
 
+type PlayerId = Int
+
+main :: IO ()
 main = do
     gameState <- newMVar initialState
+    monitorVars <- newMVar initialMonitorState
     putStrLn "Listening for connections."
     serve (Host "localhost") "8080" $ \(connectionSocket, remoteAddr) -> do
-        pId <- playerConnect gameState
-        display gameState
-        listenTo connectionSocket gameState pId
+        
+        _msg <- recv connectionSocket 256
+        let msg = maybe "bla" unpack  _msg
+        if msg == "monitor"
+        then do
+             send connectionSocket $ pack "Connected as monitor"
+             mId <- monitorConnect monitorVars
+             monitorStuff connectionSocket mId monitorVars
+        else do
+             send connectionSocket $ pack "Connected as player"
+             pId <- playerConnect gameState
+             display gameState
+             listenTo connectionSocket gameState pId monitorVars
+
+             
+monitorStuff :: Socket -> PlayerId -> MVar MonitorState -> IO ()
+monitorStuff socket mId monitorVars = do
+    putStrLn $ "Monitor Connected: " ++ show mId
+    monitorLoop socket mId monitorVars
 
 
+monitorLoop :: Socket -> PlayerId -> MVar MonitorState -> IO ()    
+monitorLoop socket mId monitorVars = do 
+    mvars <- takeMVar monitorVars
+    let thisMVar = find (\t -> fst t == mId) (varsOf mvars)
+    mvar <- maybe notFound found thisMVar
+    let iAmTired = filter (\t -> fst t /= mId) (varsOf mvars)
+    let iCantThinkOfAName = iAmTired ++ [(mId, mvar)]
+    putMVar monitorVars $ mvars { varsOf = iCantThinkOfAName }
+    monitorLoop socket mId monitorVars
+    where
+        notFound = undefined -- TODO this seems to happen for some reason
+        found (_, mvar) = do
+            msg <- takeMVar mvar
+            send socket $ pack msg
+            return mvar
+    
 
-listenTo socket gameState pId = do
+monitorConnect :: MVar MonitorState -> IO PlayerId 
+monitorConnect monitorVars = do
+    mvars <- takeMVar monitorVars
+    let id = midNrOf mvars
+    putMVar monitorVars $ mvars { midNrOf = id + 1 }
+    return id
+
+
+listenTo :: Socket -> MVar State -> PlayerId -> MVar MonitorState -> IO ()    
+listenTo socket gameState pId monitorVars = do
     msg <- recv socket 256
     maybe nothingReceived dataReceived msg
     where
@@ -29,12 +74,13 @@ listenTo socket gameState pId = do
         
         dataReceived byteString = do
             let received = readMaybe $ unpack byteString :: Maybe Message
-            response <- maybe (return "Not a command") (handle gameState pId) received
+            response <- maybe (return "Not a command") (handle gameState pId monitorVars) received
             send socket $ pack response
-            listenTo socket gameState pId
+            listenTo socket gameState pId monitorVars
 
 
 
+display :: MVar State -> IO ()            
 display gameState = do
     state <- readMVar gameState
     putStrLn hbar
@@ -50,6 +96,7 @@ display gameState = do
 
 
 
+playerConnect :: MVar State -> IO PlayerId       
 playerConnect gameState = do
     state <- takeMVar gameState
     let idNr = idNrOf state
@@ -60,7 +107,8 @@ playerConnect gameState = do
     return idNr
 
 
-
+    
+playerDisconnect :: MVar State -> PlayerId -> IO ()    
 playerDisconnect gameState pId = do
     state <- takeMVar gameState
     let newPlayers = removeThisPlayerFrom $ playersOf state
@@ -69,9 +117,11 @@ playerDisconnect gameState pId = do
         removeThisPlayerFrom = filter $ \p -> idOf p /= pId
 
 
+
+handle :: MVar State -> PlayerId -> MVar MonitorState -> Message -> IO String      
 -- TODO might want to merge the logic from Ready and Unready
 -- TODO Also don't look at the readyness if the game has already started
-handle gameState pId Ready = do
+handle gameState pId _ Ready = do
     putStrLn $ show pId ++ " Ready"
     state <- readMVar gameState
     let maybePlayer = find playerWithThisId (playersOf state)
@@ -96,7 +146,7 @@ handle gameState pId Ready = do
         playerWithThisId p = idOf p == pId
         setReady p = p {readinessOf = True}
 
-handle gameState pId Unready = do
+handle gameState pId _ Unready = do
     putStrLn $ show pId ++ " Unready"
     state <- readMVar gameState
     let maybePlayer = find playerWithThisId (playersOf state)
@@ -116,18 +166,33 @@ handle gameState pId Unready = do
         playerWithThisId p = idOf p == pId
         setUnready p = p {readinessOf = False}
 
-handle gameState pId (Say msg) = do
+handle gameState pId monitorVars (Say msg) = do
     state <- takeMVar gameState
     let newMessages = (msg ++ ": " ++ show pId) : lobbyChatOf state
     putMVar gameState $ state {lobbyChatOf = newMessages}
+    
+    mstate <- takeMVar monitorVars
+    
+    _ <- sequence $ fmap (flip putMVar msg) (map (\(a, b) -> b) (varsOf mstate))
+    
+    -- I need to update all the vars in this list, put the message in each one
+    -- how the hell do I do that? I need an IO monad, but then I need to get
+    -- rid of it. How do I do it? I guess I could do a function that maps an IO
+    -- monad onto each element of the list, then extract it somehow with a 
+    -- traverse or something. IDK, too tired. Good luck future Gyuri.
+    -- let blabla = (\(i, v) -> (i, )) `map` (varsOf mstate)
+    putMVar monitorVars $ mstate
+    
     display gameState
     return "Message Sent."
+    where   
+        swap f a b = f b a
 
-handle gameState _ GetMessages = do
+handle gameState _ _ GetMessages = do
     chat <- lobbyChatOf <$> readMVar gameState
     return $ unlines chat
 
-handle gameState pId (Rename newName) = do
+handle gameState pId _ (Rename newName) = do
     state <- takeMVar gameState
     let maybePlayerWithName = find playerWithThisName $ playersOf state
     maybe (changePlayerName state) (playerExists state) maybePlayerWithName
@@ -155,6 +220,6 @@ handle gameState pId (Rename newName) = do
         playerWithThisId p = idOf p == pId
         playerWithThisName p = nameOf p == newName
 
-handle _ _ _ = do
+handle _ _ _ _ = do
     putStrLn "I forgott to pattern match!"
     return "I forgott to pattern match!"

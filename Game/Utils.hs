@@ -3,11 +3,13 @@
 module Utils where
 
 import Text.Read (readMaybe)
+import Control.Concurrent.MVar
 
 data Role = Unassigned
           | Civilian
           | Maffia
           deriving (Show, Eq)
+
 
 data Player = Player { idOf :: Int
                      , nameOf :: String
@@ -29,19 +31,35 @@ data State = State { playersOf :: [Player]
                    , modeOf :: GameMode
                    } deriving (Show)
 
+
+data MonitorState = MonitorState { midNrOf :: Int
+                                 , varsOf :: [(Int, MVar String)]
+                                 }
+
+
+initialMonitorState :: MonitorState                                 
+initialMonitorState = MonitorState { midNrOf = 0
+                                   , varsOf = [] }
+                                  
+                                  
+
+initialState :: State                                 
 initialState = State { playersOf = [] 
                      , lobbyChatOf = []
                      , idNrOf = 0 
-                     , modeOf = Lobby
-                     }
+                     , modeOf = Lobby }
+
                      
+newPlayer :: Int -> String -> Player                     
 newPlayer id name = Player { idOf = id
                            , nameOf = name
                            , roleOf = Unassigned 
                            , readinessOf = False }
 
+
 maffiaFromPlayerNr :: Int -> Int
 maffiaFromPlayerNr pn = ceiling (fromIntegral pn / 3)
+
 
 genList :: Int -> [Role]
 genList playerNumber = maffias ++ civils

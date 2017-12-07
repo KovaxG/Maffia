@@ -3,6 +3,7 @@ module Client where
 import Network.Simple.TCP
 import Data.ByteString.Char8 (pack, unpack)
 
+main :: IO ()
 main = do 
     putStrLn "Connecting to server."
     connect "localhost" "8080" $ \(serverSocket, sockaddr) -> do
@@ -11,6 +12,7 @@ main = do
         loop serverSocket
 
 
+loop :: Socket -> IO ()
 loop socket = do
         putStr "> "
         message <- getLine
