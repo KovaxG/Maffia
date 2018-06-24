@@ -8,6 +8,7 @@ import Response
 import Common
 
 import Data.List
+import Data.Maybe
 
 run :: State -> Event -> (State, Response)
 run originalState@(InitialState names) (AddPlayer newName)
@@ -23,7 +24,7 @@ run originalState@(InitialState names) (AddPlayer newName)
     playerNameExists = elem newName names
 
 run originalState@(InitialState names) (StartGame salt)
-  | length names < 5 =
+  | length names < 4 =
     let state = originalState
         response = NeedMorePlayers
     in (state, response)
@@ -50,9 +51,7 @@ run (Night players) EndNight
         response = EndOfNight
     in (state, response)
   where
-    -- should replace with a function apply effects when medics are added
-    killPlayers = filterNot (\p -> elem MaffiaTarget $ pEffect p)
-    processedPlayers = killPlayers players
+    processedPlayers = applyEffects players
 
 run state (QueryRole name)
   | gameHasStarted state = maybe playerNotFound playerFound selectedPlayer
@@ -60,7 +59,7 @@ run state (QueryRole name)
   where
     selectedPlayer = findPlayerByName name (players state)
     playerNotFound = (state, NoSuchPlayer)
-    playerFound player = (state, PlayerRoleIs (show $ pRole player))
+    playerFound player = (state, PlayerRoleIs (pRole player))
 
 run state@(Night players) (MaffiaHit name) =
   maybe playerNotFound playerFound selectedPlayer
@@ -68,11 +67,60 @@ run state@(Night players) (MaffiaHit name) =
     selectedPlayer = findPlayerByName name players
     playerNotFound = (state, NoSuchPlayer)
     playerFound player =
-      let playersWithNoMaffiaHits = removeMaffiaHits <$> players
-          hitPlayer = player { pEffect = MaffiaTarget : pEffect player }
+      let playersWithNoMaffiaHits =
+            removeEffect MaffiaTarget <$> players
+          hitPlayer = player {
+            pEffects = MaffiaTarget : pEffects player
+          }
           newState = state {
             players = replacePlayer hitPlayer playersWithNoMaffiaHits
           }
       in (newState, MaffiaTargetSuccess)
 
+-- should merge MaffiaHit with DoctorSave
+run state@(Night players) (DoctorSave name) =
+  maybe playerNotFound playerFound selectedPlayer
+  where
+    selectedPlayer = findPlayerByName name players
+    playerNotFound = (state, NoSuchPlayer)
+    playerFound player =
+      let playersWithNoDoctorSaves =
+            removeEffect DoctorTarget <$> players
+          savedPlayer = player {
+            pEffects = DoctorTarget : pEffects player
+          }
+          newState = state {
+            players = replacePlayer savedPlayer playersWithNoDoctorSaves
+          }
+      in (newState, DoctorTargetSuccess)
+
+run state@(Night players) (Investigate name) =
+  maybe playerNotFound playerFound selectedPlayer
+  where
+    selectedPlayer = findPlayerByName name players
+    playerNotFound = (state, NoSuchPlayer)
+    playerFound player
+      | alreadyInvestigated = (state, InvestigationLimit)
+      | otherwise =
+        let investigatedPlayer = player {
+              pEffects = Investigated : pEffects player
+            }
+            newState = state {
+              players = replacePlayer investigatedPlayer players
+            }
+        in (newState, PlayerRoleIs $ pRole player)
+      where
+        alreadyInvestigated = elem Investigated (pEffects =<< players)
+
 run state _ = (state, UndefinedTransition)
+
+applyEffect :: Player -> Maybe Player
+applyEffect player
+  | pEffects player == [MaffiaTarget] = Nothing
+  | otherwise = Just $ player { pEffects = [] }
+
+applyEffects :: [Player] -> [Player]
+applyEffects players =
+  map fromJust $
+  filter isJust $
+  applyEffect <$> players

@@ -8,4 +8,8 @@ data Event = AddPlayer PlayerName
            | EndNight
            | QueryRole PlayerName
            | MaffiaHit PlayerName
+           | DoctorSave PlayerName
+           | Investigate PlayerName
+           | Vote PlayerName PlayerName
+           | CancelVote PlayerName
            deriving (Show, Read)

@@ -39,21 +39,21 @@ stateTests = [
   (run (InitialState ["Gyuri"]) (AddPlayer "Gyuri"))
   (InitialState ["Gyuri"], PlayerNameTaken),
 
-  Test "Cannot start game if there are less then 5 players"
-  (run (InitialState ["Gyuri"]) (StartGame 5))
-  (InitialState ["Gyuri"], NeedMorePlayers),
+  Test "Cannot start game if there are less then 4 players"
+  (run (InitialState (tail playerNames)) (StartGame 5))
+  (InitialState (tail playerNames), NeedMorePlayers),
 
-  Test "Can start game if there are at least 5 players"
+  Test "Can start game if there are at least 4 players"
   (run (InitialState playerNames) (StartGame 5))
   (Day playerList, GameStarted),
 
   Test "Player can ask for role in day"
   (run (Day playerList) (QueryRole "Gyuri"))
-  (Day playerList, PlayerRoleIs "Civilian"),
+  (Day playerList, PlayerRoleIs Maffia),
 
   Test "Player can ask for role in night"
   (run (Night playerList) (QueryRole "Gyuri"))
-  (Night playerList, PlayerRoleIs "Civilian"),
+  (Night playerList, PlayerRoleIs Maffia),
 
   Test "Not existing player role"
   (run (Day playerList) (QueryRole "Simpson"))
@@ -79,20 +79,70 @@ stateTests = [
   (run (Night [Player "Gyuri" Civilian [MaffiaTarget], Player "Tamas" Civilian []]) (MaffiaHit "Tamas"))
   ((Night [Player "Tamas" Civilian [MaffiaTarget], Player "Gyuri" Civilian []]), MaffiaTargetSuccess),
 
-    Test "Player with maffia hit dies when day comes"
-    (run (Night playerHit) EndNight)
-    ((Day playerHitDies), EndOfNight),
+  Test "Player with maffia hit dies when day comes"
+  (run (Night playerHit) EndNight)
+  ((Day playerHitDies), EndOfNight),
 
-    Test "If nr of maffia is greater or equal to civilians, maffia win"
-    (run (Night maffiaAlmostWinPlayersList) EndNight)
-    (EndOfGame, MaffiaWins)
+  Test "If nr of maffia is greater or equal to civilians, maffia win"
+  (run (Night maffiaAlmostWinPlayersList) EndNight)
+  (EndOfGame, MaffiaWins),
+
+  Test "Doctor hits on one player"
+  (run (Night [Player "Gyuri" Civilian []]) (DoctorSave "Gyuri"))
+  (Night [Player "Gyuri" Civilian [DoctorTarget]], DoctorTargetSuccess),
+
+  Test "Doctor hits on non existent player"
+  (run (Night []) (DoctorSave "Gyuri"))
+  (Night [], NoSuchPlayer),
+
+  Test "Player with maffia and doctor target lives the next day"
+  (run (Night [Player "Gyuri" Civilian [DoctorTarget, MaffiaTarget]]) EndNight)
+  (Day [Player "Gyuri" Civilian []], EndOfNight),
+
+  Test "Detective can investigate a player"
+  (run (Night [Player "Gyuri" Civilian []]) (Investigate "Gyuri"))
+  (Night [Player "Gyuri" Civilian [Investigated]], PlayerRoleIs Civilian),
+
+  Test "Detective can not investigate non existant player"
+  (run (Night [Player "Gyuri" Civilian []]) (Investigate "Luri"))
+  (Night [Player "Gyuri" Civilian []], NoSuchPlayer),
+
+  Test "Detective can not investigate in the day"
+  (run  (Day [Player "Gyuri" Civilian []]) (Investigate "Gyuri"))
+  (Day [Player "Gyuri" Civilian []], UndefinedTransition),
+
+  Test "Detective can only investiage once a turn"
+  (run (Night playersInvestigated) (Investigate "Gyuri"))
+  (Night playersInvestigated, InvestigationLimit),
+
+  Test "You can not vote during the night"
+  (run (Night playerList) (Vote "Gyuri" "Kristof"))
+  (Night playerList, UndefinedTransition),
+
+  Test "Voter does not exist"
+  (run (Day playerList) (Vote "Hans" "Kristof"))
+  (Day playerList, NoSuchPlayer),
+
+  Test "Voted person does not exist"
+  (run (Day playerList) (Vote "Kristof" "Hans"))
+  (Day playerList, NoSuchPlayer)
+
+  --Test "Voter cancels his vote"
+
+  --Test "Voter changes his vote"
+
+  --Test "Majority vote for lynching, player dies"
+
+  --Test "Players can only lynch one player per day"
   ]
 
-playerNames = ["Gyuri", "Tamas", "Kristof", "Geza", "Zoli", "Robert"]
-playerList = toPlayer <$> playerNames
-  where toPlayer name
-          | name == "Tamas" || name == "Kristof" = Player name Maffia []
-          | otherwise = Player name Civilian []
+playerNames = pName <$> playerList
+playerList = [
+  Player "Gyuri" Maffia [],
+  Player "Tamas" Doctor [],
+  Player "Kristof" Detective [],
+  Player "Geza" Civilian []
+  ]
 
 playerHit = [
   Player "Gyuri" Maffia [],
@@ -115,13 +165,39 @@ maffiaAlmostWinPlayersList = [
   Player "Imelda" Civilian []
   ]
 
+playersInvestigated = [
+  Player "Gyuri" Maffia [Investigated],
+  Player "Tamas" Detective [],
+  Player "Kristof" Doctor [],
+  Player "Geza" Civilian []
+  ]
+
+startingState = InitialState []
+
+runGame :: State -> [Event] -> [Response]
+runGame startState events =
+  snd $ foldl rule (InitialState [], []) events
+  where
+    rule :: (State, [Response]) -> Event -> (State, [Response])
+    rule (state, responses) event =
+      let (newState, response) = run state event
+      in (newState, responses +: response)
+
 main :: IO ()
-main = gameLoop $ InitialState []
+main = do
+  gameLoop $ InitialState []
   where
     gameLoop :: State -> IO ()
     gameLoop state = do
       putStr "> "
-      input <- read <$> getLine :: IO Event
+      input <- safeRead <$> getLine :: IO (Maybe Event)
+      maybe (incorrectInput state) (correctInput state) input
+
+    incorrectInput state = do
+      putStrLn "Parse Error!"
+      gameLoop state
+
+    correctInput state input = do
       let (nextState, response) = run state input
       putStrLn $ toMessage response
       if nextState == EndOfGame
