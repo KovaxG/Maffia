@@ -3,9 +3,12 @@ module Server where
 import Network.Simple.TCP
 import Data.ByteString.Char8 (pack, unpack)
 import Control.Concurrent.MVar
-import Utils
 import Text.Read (readMaybe)
 import Data.List (find)
+import Debug.Trace
+
+import Utils
+import MonitorLogic
 
 type PlayerId = Int
 
@@ -13,9 +16,11 @@ main :: IO ()
 main = do
     gameState <- newMVar initialState
     monitorVars <- newMVar initialMonitorState
+    
     putStrLn "Listening for connections."
     serve (Host "localhost") "8080" $ \(connectionSocket, remoteAddr) -> do
-        
+        mainLoop connectionSocket
+        -- Remove this block, and replace it with the mainLoop
         _msg <- recv connectionSocket 256
         let msg = maybe "bla" unpack  _msg
         if msg == "monitor"
@@ -29,6 +34,29 @@ main = do
              display gameState
              listenTo connectionSocket gameState pId monitorVars
 
+
+-- There should be only one recv and readMVar at the start
+-- and a send and setMVar at the end. In between the logic
+-- should be totally pure.
+mainLoop :: Socket -> IO ()
+mainLoop socket = do
+    received <- incommingMessage socket
+    if received == "monitor"
+    then monitorLogic
+    else playerLogic
+    mainLoop socket
+    
+    
+playerLogic :: IO ()
+playerLogic = putStrLn "Doing Player Logic" 
+    
+    
+incommingMessage :: Socket -> IO String
+incommingMessage socket = decodeMsg <$> recv socket 512
+    where decodeMsg = maybe decodeFail decodeSucc
+          decodeFail = "Could not decode message."
+          decodeSucc = unpack
+    
              
 monitorStuff :: Socket -> PlayerId -> MVar MonitorState -> IO ()
 monitorStuff socket mId monitorVars = do
@@ -46,7 +74,7 @@ monitorLoop socket mId monitorVars = do
     putMVar monitorVars $ mvars { varsOf = iCantThinkOfAName }
     monitorLoop socket mId monitorVars
     where
-        notFound = undefined -- TODO this seems to happen for some reason
+        notFound = undefined
         found (_, mvar) = do
             msg <- takeMVar mvar
             send socket $ pack msg
@@ -57,7 +85,10 @@ monitorConnect :: MVar MonitorState -> IO PlayerId
 monitorConnect monitorVars = do
     mvars <- takeMVar monitorVars
     let id = midNrOf mvars
-    putMVar monitorVars $ mvars { midNrOf = id + 1 }
+    newMonitorMVar <- newMVar "Joined Chat"
+    let newVarsOf = varsOf mvars ++ [(id, newMonitorMVar)]
+    putMVar monitorVars $ mvars { midNrOf = id + 1,
+                                  varsOf =  newVarsOf }
     return id
 
 

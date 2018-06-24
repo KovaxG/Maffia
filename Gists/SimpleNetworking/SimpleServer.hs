@@ -2,6 +2,7 @@
 
 import Network.Simple.TCP
 import Data.ByteString.Char8 (pack, unpack)
+import Control.Concurrent
 
 main = do
     print "Listening for connections."

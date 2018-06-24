@@ -17,8 +17,7 @@ loop socket = do
         message <- recv socket 2048
         maybe noResponse response message
         where 
-            noResponse = do
-                putStrLn "Exited"
+            noResponse = putStrLn "Exited"
             response byteString = do
                 let msg = unpack byteString
                 putStrLn msg

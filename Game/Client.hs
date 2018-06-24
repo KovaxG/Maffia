@@ -7,18 +7,19 @@ main :: IO ()
 main = do 
     putStrLn "Connecting to server."
     connect "localhost" "8080" $ \(serverSocket, sockaddr) -> do
-        putStrLn $ "Succesfully connected to " ++ show sockaddr
         putStrLn "Write any message, send \"exit\" to disconnect."
-        loop serverSocket
+        mainLoop serverSocket
 
 
-loop :: Socket -> IO ()
-loop socket = do
+mainLoop :: Socket -> IO ()
+mainLoop socket = do
         putStr "> "
         message <- getLine
         
         if message == "exit"
-        then putStrLn "Exited"
+        then do 
+            putStrLn "Exited"
+            return ()
         else do
             send socket $ pack message
             response <- recv socket 2048
@@ -27,4 +28,4 @@ loop socket = do
                 noAck = putStrLn "No Message."
                 acked r = do
                     putStrLn $ unpack r
-                    loop socket
+                    mainLoop socket         
