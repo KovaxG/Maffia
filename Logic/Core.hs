@@ -112,6 +112,41 @@ run state@(Night players) (Investigate name) =
       where
         alreadyInvestigated = elem Investigated (pEffects =<< players)
 
+run state@(Day players) (Vote voterName votedName) =
+  maybe playerNotFound id $ performVote <$> voter <*> voted
+  where
+    voted = findPlayerByName votedName players
+    voter = findPlayerByName voterName players
+    playerNotFound = (state, NoSuchPlayer)
+
+    -- TODO this logic is pretty crappy and convoluted
+    performVote :: Player -> Player -> (State, Response)
+    performVote voter voted
+      | votedHasMajorityVote =
+        let lynchedPerson = voted { pEffects = [Lynched] }
+            newState = state {
+              players = replacePlayer lynchedPerson players
+            }
+        in (newState, VoteCast)
+      | otherwise =
+        let playersWithNoVote = removeEffect vote <$> players
+            votedWithVote = addEffect vote voted
+            newPlayers = replacePlayer votedWithVote playersWithNoVote
+            newState = state { players = newPlayers }
+        in (newState, VoteCast)
+      where
+        vote = VotedBy $ pName voter
+        votedHasMajorityVote = countVotes > (length players `div` 2)
+        -- not the best approach, since we count any effects
+        countVotes = (length $ pEffects voted) + 1
+
+run state@(Day players) (CancelVote name) =
+  let playersWithoutVote = removeEffect vote <$> players
+      newState = state { players = playersWithoutVote }
+  in (newState, VoteCancelled)
+  where
+    vote = VotedBy name
+
 run state _ = (state, UndefinedTransition)
 
 applyEffect :: Player -> Maybe Player

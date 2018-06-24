@@ -125,15 +125,29 @@ stateTests = [
 
   Test "Voted person does not exist"
   (run (Day playerList) (Vote "Kristof" "Hans"))
-  (Day playerList, NoSuchPlayer)
+  (Day playerList, NoSuchPlayer),
 
-  --Test "Voter cancels his vote"
+  Test "Successfull vote"
+  (run (Day preVotePlayers) (Vote "Kristof" "Gyuri"))
+  (Day postVotePlayers, VoteCast),
 
-  --Test "Voter changes his vote"
+  Test "Voter cancels his vote"
+  (run (Day postVotePlayers) (CancelVote "Kristof"))
+  (Day preVotePlayers, VoteCancelled),
 
-  --Test "Majority vote for lynching, player dies"
+  Test "Voter changes his vote"
+  (run (Day postVotePlayers) (Vote "Kristof" "Tamas"))
+  (Day postVoteChanged, VoteCast),
+
+  Test "Majority vote for lynching, player dies"
+  (run (Day almostMajorityVotes) (Vote "Geza" "Tamas"))
+  (Day postMajorityVotes, VoteCast)
 
   --Test "Players can only lynch one player per day"
+
+  --Test "If last maffia is lynched town wins"
+
+  --Test "If last maffia is killed by maffia, town wins"
   ]
 
 playerNames = pName <$> playerList
@@ -168,6 +182,41 @@ maffiaAlmostWinPlayersList = [
 playersInvestigated = [
   Player "Gyuri" Maffia [Investigated],
   Player "Tamas" Detective [],
+  Player "Kristof" Doctor [],
+  Player "Geza" Civilian []
+  ]
+
+preVotePlayers = [
+  Player "Gyuri" Maffia [],
+  Player "Tamas" Detective [],
+  Player "Kristof" Doctor [],
+  Player "Geza" Civilian []
+  ]
+
+postVotePlayers = [
+  Player "Gyuri" Maffia [VotedBy "Kristof"],
+  Player "Tamas" Detective [],
+  Player "Kristof" Doctor [],
+  Player "Geza" Civilian []
+  ]
+
+postVoteChanged = [
+  Player "Tamas" Detective [VotedBy "Kristof"],
+  Player "Gyuri" Maffia [],
+  Player "Kristof" Doctor [],
+  Player "Geza" Civilian []
+  ]
+
+almostMajorityVotes = [
+  Player "Gyuri" Maffia [],
+  Player "Tamas" Detective [VotedBy "Kristof", VotedBy "Gyuri"],
+  Player "Kristof" Doctor [],
+  Player "Geza" Civilian []
+  ]
+
+postMajorityVotes = [
+  Player "Tamas" Detective [Lynched],
+  Player "Gyuri" Maffia [],
   Player "Kristof" Doctor [],
   Player "Geza" Civilian []
   ]

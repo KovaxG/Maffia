@@ -38,6 +38,7 @@ data Effect = MaffiaTarget
             | DoctorTarget
             | Investigated
             | VotedBy PlayerName
+            | Lynched
             deriving (Show, Eq)
 
 generateRoles :: Salt -> Int -> [Role]
@@ -74,6 +75,11 @@ removeEffect :: Effect -> Player -> Player
 removeEffect effect player = player { pEffects = noEffects }
   where
     noEffects = filterNot (== effect) (pEffects player)
+
+addEffect :: Effect -> Player -> Player
+addEffect effect player = player {
+  pEffects = effect : pEffects player
+}
 
 filterNot :: (a -> Bool) -> [a] -> [a]
 filterNot f = filter (not . f)
