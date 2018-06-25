@@ -26,12 +26,12 @@ data Role = Maffia
           | Detective
           deriving (Show, Eq)
 
-isMaffia :: Role -> Bool
-isMaffia role = case role of
+isMaffia :: Player -> Bool
+isMaffia player = case pRole player of
   Maffia -> True
   _ -> False
 
-isTown :: Role -> Bool
+isTown :: Player -> Bool
 isTown = not . isMaffia
 
 data Effect = MaffiaTarget

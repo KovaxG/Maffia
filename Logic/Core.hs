@@ -10,28 +10,28 @@ import Common
 import Data.List
 import Data.Maybe
 
-run :: State -> Event -> (State, Response)
+run :: State -> Event -> (State, [Response])
 run originalState@(InitialState names) (AddPlayer newName)
   | playerNameExists =
     let state = originalState
-        response = PlayerNameTaken
-    in (state, response)
+        responses = [Feedback PlayerNameTaken]
+    in (state, responses)
   | otherwise =
     let state = InitialState { names = newName : names }
-        response = PlayerAdded
-    in (state, response)
+        responses = [BroadCast PlayerAdded]
+    in (state, responses)
   where
     playerNameExists = elem newName names
 
 run originalState@(InitialState names) (StartGame salt)
   | length names < 4 =
     let state = originalState
-        response = NeedMorePlayers
-    in (state, response)
+        responses = [BroadCast NeedMorePlayers]
+    in (state, responses)
   | otherwise =
     let state = Day { players = giveRole names }
-        response = GameStarted
-    in (state, response)
+        responses = [BroadCast GameStarted]
+    in (state, responses)
   where
     giveRole :: [PlayerName] -> [Player]
     giveRole newPlayers = (\(name, role) -> Player name role []) <$> nameAndRoles
@@ -39,33 +39,41 @@ run originalState@(InitialState names) (StartGame salt)
         nameAndRoles = zip newPlayers roles
         roles = generateRoles salt (length names)
 
-run (Day players) EndDay =
-  let state = Night {players = players}
-      response = EndOfDay
-  in (state, response)
+run (Day players) EndDay
+  | allMaffiaDead = (EndOfGame, [BroadCast TownWins])
+  | otherwise =
+    let state = Night { players = newPlayers }
+        responses = [BroadCast EndOfDay]
+    in (state, responses)
+  where
+    removeLynched = filterNot $ \p -> elem Lynched (pEffects p)
+    allMaffiaDead = count isMaffia newPlayers == 0
+    newPlayers = removeLynched players
 
 run (Night players) EndNight
-  | maffiaWin processedPlayers = (EndOfGame, MaffiaWins)
+  | allMaffiaDead = (EndOfGame, [BroadCast TownWins])
+  | maffiaWin processedPlayers = (EndOfGame, [BroadCast MaffiaWins])
   | otherwise =
     let state = Day { players = processedPlayers }
-        response = EndOfNight
-    in (state, response)
+        responses = [BroadCast EndOfNight]
+    in (state, responses)
   where
     processedPlayers = applyEffects players
+    allMaffiaDead = count isMaffia processedPlayers == 0
 
 run state (QueryRole name)
   | gameHasStarted state = maybe playerNotFound playerFound selectedPlayer
-  | otherwise = (state, UndefinedTransition)
+  | otherwise = (state, [Feedback UndefinedTransition])
   where
     selectedPlayer = findPlayerByName name (players state)
-    playerNotFound = (state, NoSuchPlayer)
-    playerFound player = (state, PlayerRoleIs (pRole player))
+    playerNotFound = (state, [Feedback NoSuchPlayer])
+    playerFound player = (state, [Feedback (PlayerRoleIs (pRole player))])
 
 run state@(Night players) (MaffiaHit name) =
   maybe playerNotFound playerFound selectedPlayer
   where
     selectedPlayer = findPlayerByName name players
-    playerNotFound = (state, NoSuchPlayer)
+    playerNotFound = (state, [Feedback NoSuchPlayer])
     playerFound player =
       let playersWithNoMaffiaHits =
             removeEffect MaffiaTarget <$> players
@@ -75,14 +83,14 @@ run state@(Night players) (MaffiaHit name) =
           newState = state {
             players = replacePlayer hitPlayer playersWithNoMaffiaHits
           }
-      in (newState, MaffiaTargetSuccess)
+      in (newState, [TeamMessage MaffiaTargetSuccess])
 
 -- should merge MaffiaHit with DoctorSave
 run state@(Night players) (DoctorSave name) =
   maybe playerNotFound playerFound selectedPlayer
   where
     selectedPlayer = findPlayerByName name players
-    playerNotFound = (state, NoSuchPlayer)
+    playerNotFound = (state, [Feedback NoSuchPlayer])
     playerFound player =
       let playersWithNoDoctorSaves =
             removeEffect DoctorTarget <$> players
@@ -92,15 +100,15 @@ run state@(Night players) (DoctorSave name) =
           newState = state {
             players = replacePlayer savedPlayer playersWithNoDoctorSaves
           }
-      in (newState, DoctorTargetSuccess)
+      in (newState, [Feedback DoctorTargetSuccess])
 
 run state@(Night players) (Investigate name) =
   maybe playerNotFound playerFound selectedPlayer
   where
     selectedPlayer = findPlayerByName name players
-    playerNotFound = (state, NoSuchPlayer)
+    playerNotFound = (state, [Feedback NoSuchPlayer])
     playerFound player
-      | alreadyInvestigated = (state, InvestigationLimit)
+      | alreadyInvestigated = (state, [Feedback InvestigationLimit])
       | otherwise =
         let investigatedPlayer = player {
               pEffects = Investigated : pEffects player
@@ -108,46 +116,52 @@ run state@(Night players) (Investigate name) =
             newState = state {
               players = replacePlayer investigatedPlayer players
             }
-        in (newState, PlayerRoleIs $ pRole player)
+            playerRole = pRole player
+        in (newState, [Feedback (PlayerRoleIs playerRole)])
       where
         alreadyInvestigated = elem Investigated (pEffects =<< players)
 
-run state@(Day players) (Vote voterName votedName) =
-  maybe playerNotFound id $ performVote <$> voter <*> voted
+run state@(Day players) (Vote voterName votedName)
+  | someOneIsAlreadyLynched = (state, [Feedback AlreadyLynched])
+  | otherwise =
+    maybe playerNotFound id $ performVote <$> voter <*> voted
   where
+    someOneIsAlreadyLynched = elem Lynched (pEffects =<< players)
+
     voted = findPlayerByName votedName players
     voter = findPlayerByName voterName players
-    playerNotFound = (state, NoSuchPlayer)
+    playerNotFound = (state, [Feedback NoSuchPlayer])
 
     -- TODO this logic is pretty crappy and convoluted
-    performVote :: Player -> Player -> (State, Response)
+    performVote :: Player -> Player -> (State, [Response])
     performVote voter voted
       | votedHasMajorityVote =
         let lynchedPerson = voted { pEffects = [Lynched] }
             newState = state {
               players = replacePlayer lynchedPerson players
             }
-        in (newState, VoteCast)
+        in (newState, [BroadCast VoteCast])
       | otherwise =
         let playersWithNoVote = removeEffect vote <$> players
             votedWithVote = addEffect vote voted
             newPlayers = replacePlayer votedWithVote playersWithNoVote
             newState = state { players = newPlayers }
-        in (newState, VoteCast)
+        in (newState, [BroadCast VoteCast])
       where
         vote = VotedBy $ pName voter
         votedHasMajorityVote = countVotes > (length players `div` 2)
-        -- not the best approach, since we count any effects
-        countVotes = (length $ pEffects voted) + 1
+        countVotes = 1 + (count isVote (pEffects voted))
+        isVote (VotedBy _) = True
+        isVote _ = False
 
 run state@(Day players) (CancelVote name) =
   let playersWithoutVote = removeEffect vote <$> players
       newState = state { players = playersWithoutVote }
-  in (newState, VoteCancelled)
+  in (newState, [BroadCast VoteCancelled])
   where
     vote = VotedBy name
 
-run state _ = (state, UndefinedTransition)
+run state _ = (state, [Feedback UndefinedTransition])
 
 applyEffect :: Player -> Maybe Player
 applyEffect player
