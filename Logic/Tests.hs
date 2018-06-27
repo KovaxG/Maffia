@@ -87,11 +87,11 @@ stateTests = [
 
   Test "Player with maffia hit dies when day comes"
   (run (Night playerHit) EndNight)
-  ((Day playerHitDies), [BroadCast EndOfNight]),
+  ((Day playerHitDies), [BroadCast EndOfNight, BroadCast (PlayerDied "Zoli")]),
 
   Test "If nr of maffia is greater or equal to civilians, maffia win"
   (run (Night maffiaAlmostWinPlayersList) EndNight)
-  (EndOfGame, [BroadCast MaffiaWins]),
+  (EndOfGame, [BroadCast MaffiaWins, BroadCast (PlayerDied "Kristof")]),
 
   Test "Doctor hits on one player"
   (run (Night [Player "Gyuri" Civilian []]) (DoctorSave "Gyuri"))
@@ -147,7 +147,7 @@ stateTests = [
 
   Test "Majority vote for lynching, player will be lynched"
   (run (Day almostMajorityVotes) (Vote "Geza" "Tamas"))
-  (Day postMajorityVotes, [BroadCast VoteCast]),
+  (Day postMajorityVotes, [BroadCast VoteCast, BroadCast (PlayerLynched "Tamas")]),
 
   Test "Players can not vote after a player has been lynched"
   (run (Day postMajorityVotes) (Vote "Geza" "Gyuri"))
@@ -163,7 +163,7 @@ stateTests = [
 
   Test "If last maffia is killed by maffia, town wins"
   (run (Night maffiaSuicide) EndNight)
-  (EndOfGame, [BroadCast TownWins])
+  (EndOfGame, [BroadCast (PlayerDied "Gyuri"), BroadCast TownWins])
   ]
 
 playerNames = pName <$> playerList

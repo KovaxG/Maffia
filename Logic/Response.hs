@@ -25,6 +25,8 @@ data Public = PlayerAdded
             | TownWins
             | VoteCast
             | VoteCancelled
+            | PlayerDied PlayerName
+            | PlayerLynched PlayerName
             deriving (Show, Eq)
 
 data Maffia = MaffiaTargetSuccess deriving (Show, Eq)
@@ -56,6 +58,8 @@ encodePublic msg = case msg of
   TownWins -> "The tow has won the game!"
   VoteCast -> "Your vote has been cast."
   VoteCancelled -> "Your vote has been cancelled."
+  PlayerDied name -> "Player " ++ name ++ " has died."
+  PlayerLynched name -> "Player " ++ name ++ " will be lynched."
 
 
 encodeMaffia :: Maffia -> String

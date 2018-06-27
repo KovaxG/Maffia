@@ -51,15 +51,17 @@ run (Day players) EndDay
     newPlayers = removeLynched players
 
 run (Night players) EndNight
-  | allMaffiaDead = (EndOfGame, [BroadCast TownWins])
-  | maffiaWin processedPlayers = (EndOfGame, [BroadCast MaffiaWins])
+  | allMaffiaDead = (EndOfGame, playerDiedReport ++ [BroadCast TownWins])
+  | maffiaWinGiven processedPlayers = (EndOfGame, [BroadCast MaffiaWins] ++ playerDiedReport)
   | otherwise =
     let state = Day { players = processedPlayers }
-        responses = [BroadCast EndOfNight]
+        responses = [BroadCast EndOfNight] ++ playerDiedReport
     in (state, responses)
   where
     processedPlayers = applyEffects players
     allMaffiaDead = count isMaffia processedPlayers == 0
+    playersDied = players \\ processedPlayers
+    playerDiedReport = (BroadCast . PlayerDied . pName) <$> playersDied
 
 run state (QueryRole name)
   | gameHasStarted state = maybe playerNotFound playerFound selectedPlayer
@@ -140,7 +142,11 @@ run state@(Day players) (Vote voterName votedName)
             newState = state {
               players = replacePlayer lynchedPerson players
             }
-        in (newState, [BroadCast VoteCast])
+            responses = [
+              BroadCast VoteCast,
+              BroadCast $ PlayerLynched $ pName lynchedPerson
+              ]
+        in (newState, responses)
       | otherwise =
         let playersWithNoVote = removeEffect vote <$> players
             votedWithVote = addEffect vote voted

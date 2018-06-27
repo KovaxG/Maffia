@@ -10,7 +10,10 @@ data Player = Player {
   pName :: PlayerName,
   pRole :: Role,
   pEffects :: [Effect]
-} deriving (Eq)
+}
+
+instance Eq Player where
+  p1 == p2 = pName p1 == pName p2
 
 instance Show Player where
   show player =
@@ -87,8 +90,8 @@ filterNot f = filter (not . f)
 count :: (a -> Bool) -> [a] -> Int
 count pred = length . filter pred
 
-maffiaWin :: [Player] -> Bool
-maffiaWin players = maffiaNr >= townNr
+maffiaWinGiven :: [Player] -> Bool
+maffiaWinGiven players = maffiaNr >= townNr
   where maffiaNr = count (\p -> pRole p == Maffia) players
         townNr = length players - maffiaNr
 
