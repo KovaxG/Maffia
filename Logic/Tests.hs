@@ -290,6 +290,11 @@ main = do
     correctInput state input = do
       let (nextState, responses) = run state input
       mapM_ putStrLn $ toMessage <$> responses
+      putStrLn bar
+      putStrLn $ show nextState
+      putStrLn bar
       if nextState == EndOfGame
       then return ()
       else gameLoop nextState
+        where
+          bar = replicate 10 '-'
