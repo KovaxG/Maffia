@@ -1,31 +1,44 @@
-module Client where
+-- Maffia Client
 
 import Network.Simple.TCP
 import Data.ByteString.Char8 (pack, unpack)
+import Control.Monad.Catch
 
 main :: IO ()
-main = do 
-    putStrLn "Connecting to server."
-    connect "localhost" "8080" $ \(serverSocket, sockaddr) -> do
-        putStrLn "Write any message, send \"exit\" to disconnect."
-        mainLoop serverSocket
+main = displayGreeting >> connectToServer
+
+connectToServer :: IO ()
+connectToServer = do
+  address <- askForAddress
+  port <- askForPort
+  catch (establishConnection address port) couldNotConnect
+  where
+    couldNotConnect (SomeException _) = putStrLn "Could not connect." >> connectToServer
+    establishConnection address port =
+      connect address port $ \(serverSocket, sockaddr) -> do
+        putStrLn "Succesfully connected to Server!"
+        loop serverSocket
 
 
-mainLoop :: Socket -> IO ()
-mainLoop socket = do
-        putStr "> "
-        message <- getLine
-        
-        if message == "exit"
-        then do 
-            putStrLn "Exited"
-            return ()
-        else do
-            send socket $ pack message
-            response <- recv socket 2048
-            maybe noAck acked response
-            where 
-                noAck = putStrLn "No Message."
-                acked r = do
-                    putStrLn $ unpack r
-                    mainLoop socket         
+displayGreeting :: IO ()
+displayGreeting = putStrLn "Welcome to maffia by Gyuri"
+
+askForPort :: IO String
+askForPort = putStr "Port: " >> getLine
+
+askForAddress :: IO String
+askForAddress = putStr "IP:   " >> getLine
+
+loop socket = do
+  putStr "> "
+  message <- getLine
+
+  if message == "exit"
+  then putStrLn "Stopping program."
+  else do
+    send socket $ pack message
+    ack <- recv socket 256
+    maybe noAck acked ack
+  where
+    noAck = putStrLn "Disconnected from server."
+    acked _ = l                oop socket
