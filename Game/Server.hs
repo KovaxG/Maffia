@@ -7,9 +7,6 @@ import Text.Read (readMaybe)
 import Data.List (find)
 import Debug.Trace
 
-import Utils
-import MonitorLogic
-
 type PlayerId = Int
 
 main :: IO ()

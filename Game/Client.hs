@@ -41,4 +41,4 @@ loop socket = do
     maybe noAck acked ack
   where
     noAck = putStrLn "Disconnected from server."
-    acked _ = l                oop socket
+    acked _ = loop socket
