@@ -1,6 +1,6 @@
-module Response where
+module Logic.Response where
 
-import Common
+import Logic.Common
 
 data Response = BroadCast Public
               | Feedback Private
@@ -30,6 +30,10 @@ data Public = PlayerAdded
             deriving (Show, Eq)
 
 data Maffia = MaffiaTargetSuccess deriving (Show, Eq)
+
+isBroadcast :: Response -> Bool
+isBroadcast (BroadCast _) = True
+isBroadcast _ = False
 
 toMessage :: Response -> String
 toMessage response = case response of

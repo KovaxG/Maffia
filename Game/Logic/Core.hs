@@ -1,11 +1,11 @@
-module Core (
+module Logic.Core (
   run
 ) where
 
-import States
-import Events
-import Response
-import Common
+import Logic.States
+import Logic.Events
+import Logic.Response
+import Logic.Common
 
 import Data.List
 import Data.Maybe
@@ -13,9 +13,8 @@ import Data.Maybe
 run :: State -> Event -> (State, [Response])
 run originalState@(InitialState names) (AddPlayer newName)
   | playerNameExists =
-    let state = originalState
-        responses = [Feedback PlayerNameTaken]
-    in (state, responses)
+    let responses = [Feedback PlayerNameTaken]
+    in (originalState, responses)
   | otherwise =
     let state = InitialState { names = newName : names }
         responses = [BroadCast PlayerAdded]
@@ -25,19 +24,18 @@ run originalState@(InitialState names) (AddPlayer newName)
 
 run originalState@(InitialState names) (StartGame salt)
   | length names < 4 =
-    let state = originalState
-        responses = [BroadCast NeedMorePlayers]
-    in (state, responses)
+    let responses = [BroadCast NeedMorePlayers]
+    in (originalState, responses)
   | otherwise =
     let state = Day { players = giveRole names }
         responses = [BroadCast GameStarted]
     in (state, responses)
   where
     giveRole :: [PlayerName] -> [Player]
-    giveRole newPlayers = (\(name, role) -> Player name role []) <$> nameAndRoles
+    giveRole newPlayers = zipWith toPlayer newPlayers roles
       where
-        nameAndRoles = zip newPlayers roles
         roles = generateRoles salt (length names)
+        toPlayer = \name role -> Player name role []
 
 run (Day players) EndDay
   | allMaffiaDead = (EndOfGame, [BroadCast TownWins])

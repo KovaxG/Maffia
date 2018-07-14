@@ -1,10 +1,10 @@
 module Tests where
 
-import Core
-import Common
-import States
-import Response
-import Events
+import Logic.Core
+import Logic.Common
+import Logic.States
+import Logic.Response
+import Logic.Events
 
 -- Test name expression expected
 data Test a = Test TestName a a

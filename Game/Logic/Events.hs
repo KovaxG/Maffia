@@ -1,6 +1,6 @@
-module Events where
+module Logic.Events where
 
-import Common
+import Logic.Common
 
 data Event = AddPlayer PlayerName
            | StartGame Salt

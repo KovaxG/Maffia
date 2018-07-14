@@ -1,6 +1,6 @@
-module States where
+module Logic.States where
 
-import Common
+import Logic.Common
 
 data State = InitialState { names :: [PlayerName] }
            | Day { players :: [Player] }

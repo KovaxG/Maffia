@@ -1,62 +1,93 @@
 module Server where
 
 import Common
+import Logic.Core
+import Logic.States
+import Logic.Common (safeRead)
+import Logic.Events
+import Logic.Response
 
 import Network.Simple.TCP
 import Control.Concurrent.MVar
 import Text.Read (readMaybe)
 import Data.List (find)
 import Debug.Trace
-import Control.Concurrent.Thread.Delay
-
-initialState :: [Socket]
-initialState = []
 
 main :: IO ()
 main = do
-  gameState <- newMVar initialState
-  broadCastList <- newMVar []
-
-  let log = logWith Printer
+  broadcastList <- newMVar []
+  gameState <- newMVar (InitialState [])
   log "Listening for connections."
-  serve (Host "localhost") "8080" $ \(socket, remoteAddr) -> do
-    handleReceive socket noResponse $ response socket broadCastList
-    where
-      noResponse = log "Disconnected"
-      response socket broadCastList resp =
-        if resp == "Monitor"
-        then do
-          log "Monitor Connected"
-          addMonitor socket broadCastList
-          sleepForever
-        else do
-          log "Client connected"
-          loop socket broadCastList
+  serve host port $ startServer log broadcastList gameState
+  where
+    host = Host "localhost"
+    port = "8080"
+    log = logWith Printer
 
-sleepForever :: IO ()
-sleepForever = do
-  delay 100000000000000000
-  sleepForever
+startServer :: Logger -> MVar [Socket] -> MVar State -> (Socket, SockAddr) -> IO ()
+startServer log broadcastList gameState (socket, remoteAddr) = do
+
+  handleReceive socket noResponse $ response socket broadcastList gameState
+  where
+    noResponse = log "Disconnected"
+
+    response :: Socket -> MVar [Socket] -> MVar State -> String -> IO ()
+    response socket broadcastList gameState response = case response of
+      "Monitor" -> do
+        log "Monitor Connected"
+        addMonitor socket broadcastList
+        sleepForever
+      _ -> do
+        log $ getName socket ++ "Client connected"
+        socks <- readMVar broadcastList
+        log $ show socks
+        loop log socket broadcastList gameState
 
 addMonitor :: Socket -> MVar [Socket] -> IO ()
 addMonitor socket socketsVar = do
   sockets <- takeMVar socketsVar
   putMVar socketsVar $ socket : sockets
+  putStrLn $ show (socket : sockets)
   putStrLn "Montior added to list"
 
-loop :: Socket -> MVar [Socket] -> IO ()
-loop socket broadCastList = do
-  msg <- recv socket 1024
-  maybe noMessage (message broadCastList) $ unpack <$> msg
+loop :: Logger -> Socket -> MVar [Socket] -> MVar State -> IO ()
+loop log socket broadcastList gameState =
+  handleReceive socket noMessage $ messageReceived broadcastList
   where
     noMessage = putStrLn "Disconnected"
-    message broadCastList msg = do
-      putStrLn msg
-      send socket $ pack "ok"
-      broadCastMessages broadCastList msg
-      loop socket broadCastList
+    messageReceived :: MVar [Socket] -> String -> IO ()
+    messageReceived broadcastList msg = do
+      let eventMaybe = safeRead $ drop 6 message :: Maybe Event
+      maybe failedParsing successParsing eventMaybe
+      sendTo socket "ok"
+
+      loop log socket broadcastList gameState
+      where
+        message = getName socket ++ msg
+
+        failedParsing = do
+          log message
+          broadCastMessages broadcastList message
+
+        successParsing event = do
+          state <- takeMVar gameState
+          let (newState, responses) = run state event
+          traverse processResponse responses
+          putMVar gameState newState
+          log $ show newState
+          where
+            processResponse :: Response -> IO ()
+            processResponse (BroadCast msg) = do
+              log $ encodePublic msg
+              broadCastMessages broadcastList $ encodePublic msg
+            processResponse _ = return ()
 
 broadCastMessages :: MVar [Socket] -> String -> IO ()
-broadCastMessages broadCastList msg = do
-  sockets <- readMVar broadCastList
-  mapM_ (\s -> send s $ pack msg) sockets
+broadCastMessages broadcastList msg = do
+  sockets <- readMVar broadcastList
+  trace ("socks: " ++ show sockets) (return ())
+  mapM_ (\s -> sendTo s msg) sockets
+
+getName :: Socket -> String
+getName socket = "[" ++ name' ++ "] "
+  where name' = init $ drop 9 $ show socket

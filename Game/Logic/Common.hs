@@ -1,4 +1,4 @@
-module Common where
+module Logic.Common where
 
 import Data.Sort
 import Data.List

@@ -3,11 +3,13 @@ handleReceive,
 sendTo,
 logWith,
 Logger,
-LoggerMethod (..)
+LoggerMethod (..),
+sleepForever
 ) where
 
 import Network.Simple.TCP
 import Data.ByteString.Char8 (pack, unpack)
+import Control.Concurrent.Thread.Delay
 
 handleReceive :: Socket -> IO () -> (String -> IO ()) -> IO ()
 handleReceive socket disconnected msgReceived =
@@ -21,3 +23,8 @@ type Logger = String -> IO ()
 
 logWith :: LoggerMethod -> Logger
 logWith Printer msg = putStrLn msg
+
+sleepForever :: IO ()
+sleepForever = do
+  delay 100000000000000000
+  sleepForever

@@ -36,6 +36,7 @@ askForPort = return "8080"
 askForAddress :: IO String
 askForAddress = return "localhost"
 
+establishConnection :: Logger -> String -> String -> IO ()
 establishConnection log address port =
   connect address port $ \(serverSocket, sockaddr) -> do
     log "Succesfully connected to Server!"
