@@ -5,29 +5,29 @@
 
 module Monitor where
 
+import Common
+
 import Network.Simple.TCP
-import Data.ByteString.Char8 (pack, unpack)
 
 main :: IO ()
 main = do
     putStrLn "Connecting to server."
     let ip = "localhost"
     let port = 8080
-    connect ip (show port) monitorLogic
+    let logger = logWith Printer
+    connect ip (show port) (monitorLogic logger)
 
-monitorLogic :: (Socket, SockAddr) -> IO ()
-monitorLogic (serverSocket, sockaddr) = do
-  putStrLn $ "Succesfully connected to " ++ show sockaddr
-  send serverSocket $ pack "Monitor"
-  loop serverSocket
+monitorLogic :: Logger -> (Socket, SockAddr) -> IO ()
+monitorLogic log (serverSocket, sockaddr) = do
+  log $ "Succesfully connected to " ++ show sockaddr
+  sendTo serverSocket "Monitor"
+  loop log serverSocket
 
-loop :: Socket -> IO ()
-loop socket = do
-  message <- recv socket 2048
-  maybe noResponse response message
+loop :: Logger -> Socket -> IO ()
+loop log socket = do
+  handleReceive socket noResponse response
   where
-    noResponse = putStrLn "Disconnected"
-    response byteString = do
-      let msg = unpack byteString
-      putStrLn msg
-      loop socket
+    noResponse = log "Disconnected"
+    response msg = do
+      log msg
+      loop log socket

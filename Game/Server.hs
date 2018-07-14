@@ -1,7 +1,8 @@
 module Server where
 
+import Common
+
 import Network.Simple.TCP
-import Data.ByteString.Char8 (pack, unpack)
 import Control.Concurrent.MVar
 import Text.Read (readMaybe)
 import Data.List (find)
@@ -16,21 +17,21 @@ main = do
   gameState <- newMVar initialState
   broadCastList <- newMVar []
 
-  putStrLn "Listening for connections."
+  let log = logWith Printer
+  log "Listening for connections."
   serve (Host "localhost") "8080" $ \(socket, remoteAddr) -> do
-      role <- recv socket 100
-      maybe noResponse (response socket broadCastList) $ unpack <$> role
-        where
-          noResponse = putStrLn "Disconnected"
-          response socket broadCastList resp =
-            if resp == "Monitor"
-            then do
-              putStrLn "Monitor Connected"
-              addMonitor socket broadCastList
-              sleepForever
-            else do
-              putStrLn "Client connected"
-              loop socket broadCastList
+    handleReceive socket noResponse $ response socket broadCastList
+    where
+      noResponse = log "Disconnected"
+      response socket broadCastList resp =
+        if resp == "Monitor"
+        then do
+          log "Monitor Connected"
+          addMonitor socket broadCastList
+          sleepForever
+        else do
+          log "Client connected"
+          loop socket broadCastList
 
 sleepForever :: IO ()
 sleepForever = do

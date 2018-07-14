@@ -4,20 +4,27 @@
   to each message sent.
 -}
 
+module Client where
+
+import Common
+
 import Network.Simple.TCP
-import Data.ByteString.Char8 (pack, unpack)
 import Control.Monad.Catch
 
 main :: IO ()
-main = displayGreeting >> connectToServer
+main = do
+  displayGreeting
+  connectToServer $ logWith Printer
 
-connectToServer :: IO ()
-connectToServer = do
+connectToServer :: Logger -> IO ()
+connectToServer log = do
   address <- askForAddress
   port <- askForPort
-  catch (establishConnection address port) couldNotConnect
+  catch (establishConnection log address port) couldNotConnect
   where
-    couldNotConnect (SomeException _) = putStrLn "Could not connect." >> connectToServer
+    couldNotConnect (SomeException _) = do
+      log "Could not connect."
+      connectToServer log
 
 
 displayGreeting :: IO ()
@@ -29,25 +36,25 @@ askForPort = return "8080"
 askForAddress :: IO String
 askForAddress = return "localhost"
 
-establishConnection address port =
+establishConnection log address port =
   connect address port $ \(serverSocket, sockaddr) -> do
-    putStrLn "Succesfully connected to Server!"
-    send serverSocket $ pack "wassup"
-    loop serverSocket
+    log "Succesfully connected to Server!"
+    sendTo serverSocket "wassup"
+    loop log serverSocket
 
-loop :: Socket -> IO ()
-loop socket = do
+loop :: Logger -> Socket -> IO ()
+loop log socket = do
   putStr "> "
   message <- getLine
 
   if message == "exit"
   then putStrLn "Stopping program."
   else do
-    send socket $ pack message
-    ack <- recv socket 256
-    maybe noAck acked ack
+    log $ "Sending Message: " ++ message
+    sendTo socket message
+    handleReceive socket noAck acked
   where
-    noAck = putStrLn "Disconnected from server."
+    noAck = log "Disconnected from server."
     acked message = do
-      putStrLn $ unpack message
-      loop socket
+      log $ "Received: " ++ message
+      loop log socket
