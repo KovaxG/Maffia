@@ -1,7 +1,8 @@
 @ECHO off
-ECHO Starting Maffia Test Screens
-START Client.hs
-START Client.hs
-START Monitor.hs
-START Monitor.hs
-START Server.hs
+ECHO This part is not yet implemented
+PAUSE
+:: START Client.hs
+:: START Client.hs
+:: START Monitor.hs
+:: START Monitor.hs
+:: START Server.hs
