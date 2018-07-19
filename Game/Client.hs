@@ -41,7 +41,13 @@ establishConnection log address port =
   connect address port $ \(serverSocket, sockaddr) -> do
     log "Succesfully connected to Server!"
     sendTo serverSocket "wassup"
-    loop log serverSocket
+    handleReceive serverSocket noMessage $ messageReceived serverSocket
+    where
+      noMessage = log "Disconnected"
+
+      messageReceived socket msg = do
+        log msg
+        loop log socket
 
 loop :: Logger -> Socket -> IO ()
 loop log socket = do

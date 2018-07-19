@@ -11,7 +11,8 @@ import Network.Simple.TCP
 import Data.ByteString.Char8 (pack, unpack)
 import Control.Concurrent.Thread.Delay
 
-handleReceive :: Socket -> IO () -> (String -> IO ()) -> IO ()
+-- TODO use the Player datatype instead of socket!
+handleReceive :: Socket -> IO a -> (String -> IO a) -> IO a
 handleReceive socket disconnected msgReceived =
   recv socket 256 >>= maybe disconnected (msgReceived . unpack)
 
